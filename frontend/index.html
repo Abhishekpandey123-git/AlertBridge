@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlertBridge — AI-Powered Disaster Early Warning & Response System</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        emergency: {
+                            50: '#fef2f2',
+                            100: '#fee2e2',
+                            500: '#ef4444',
+                            600: '#dc2626',
+                            700: '#b91c1c',
+                            900: '#7f1d1d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
+
+    <!-- Demo Mode Watermark Banner -->
+    <div id="demo-banner" class="bg-amber-600/90 text-amber-950 font-bold px-4 py-1.5 text-xs text-center flex items-center justify-center gap-2 border-b border-amber-500/50 shadow-sm z-50 transition-all duration-300">
+        <i class="fa-solid fa-triangle-exclamation animate-pulse"></i>
+        <span>STUDENT PROJECT PROTOTYPE — Simulated & Real-Time Open-Meteo Data Active. Not a substitute for official disaster management authorities.</span>
+        <button onclick="toggleDemoModeModal()" class="ml-4 bg-amber-950 text-amber-100 px-2.5 py-0.5 rounded text-[10px] uppercase tracking-wider hover:bg-black transition">Scenario Simulator</button>
+    </div>
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-red-600 p-2 rounded-lg text-white shadow-lg shadow-red-600/30 flex items-center justify-center">
+                    <i class="fa-solid fa-tower-broadcast text-xl animate-pulse"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg tracking-tight flex items-center gap-2">
+                        AlertBridge 
+                        <span class="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full font-medium">v1.2 Prototype</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Predict • Alert • Protect</p>
+                </div>
+            </div>
+
+            <!-- Header Quick Stats & Status -->
+            <div class="flex items-center gap-4">
+                <div class="hidden md:flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 px-3 py-1.5 rounded-lg text-xs">
+                    <span class="relative flex h-2.5 w-2.5">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    <span class="text-slate-300 font-medium">System Online</span>
+                    <span class="text-slate-500">|</span>
+                    <span id="header-timestamp" class="text-slate-400">Syncing...</span>
+                </div>
+
+                <button onclick="triggerRefresh()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition shadow-sm" title="Refresh weather & AI models">
+                    <i id="refresh-icon" class="fa-solid fa-rotate"></i>
+                    <span class="hidden sm:inline">Refresh</span>
+                </button>
+
+                <button onclick="switchTab('backend')" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition shadow-sm">
+                    <i class="fa-solid fa-code text-cyan-400"></i>
+                    <span class="hidden sm:inline">Backend API</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <div class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Sidebar Navigation -->
+        <aside class="lg:col-span-3 space-y-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg">
+                <nav class="space-y-1">
+                    <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition bg-red-600 text-white shadow-lg shadow-red-600/20">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-chart-line w-5"></i>
+                            <span>Dashboard</span>
+                        </div>
+                        <span id="badge-active-alerts-count" class="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full font-bold">1</span>
+                    </button>
+
+                    <button onclick="switchTab('alerts')" id="nav-alerts" class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-triangle-exclamation w-5 text-amber-400"></i>
+                            <span>Active Warnings</span>
+                        </div>
+                        <span class="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">Alerts</span>
+                    </button>
+
+                    <button onclick="switchTab('map')" id="nav-map" class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-map-location-dot w-5 text-emerald-400"></i>
+                            <span>Risk Map</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-xs text-slate-600"></i>
+                    </button>
+
+                    <button onclick="switchTab('response')" id="nav-response" class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-shield-halved w-5 text-cyan-400"></i>
+                            <span>Emergency Response</span>
+                        </div>
+                        <span id="badge-incidents-count" class="bg-cyan-500/20 text-cyan-400 text-xs px-2 py-0.5 rounded-full">2</span>
+                    </button>
+
+                    <button onclick="switchTab('contacts')" id="nav-contacts" class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-phone-volume w-5 text-purple-400"></i>
+                            <span>Emergency Contacts</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-xs text-slate-600"></i>
+                    </button>
+
+                    <button onclick="switchTab('backend')" id="nav-backend" class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition border-t border-slate-800/80 mt-2 pt-3">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-server w-5 text-indigo-400"></i>
+                            <span>Backend Architecture</span>
+                        </div>
+                        <span class="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded">FastAPI</span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Location Selector Box -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg space-y-3">
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <i class="fa-solid fa-location-crosshairs text-red-500"></i>
+                    Location Control
+                </h3>
+                
+                <div class="relative">
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <input type="text" id="location-search-input" placeholder="Search city (e.g. Delhi, New York)..." 
+                                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-red-500 transition">
+                        </div>
+                        <button onclick="searchCity()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </button>
+                    </div>
+                    <div id="search-suggestions" class="absolute left-0 right-0 top-full mt-1 bg-slate-950 border border-slate-800 rounded-lg shadow-2xl z-50 hidden max-h-48 overflow-y-auto divide-y divide-slate-900"></div>
+                </div>
+
+                <div class="flex items-center justify-between pt-1">
+                    <button onclick="useCurrentGPS()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition">
+                        <i class="fa-solid fa-crosshairs text-emerald-400"></i>
+                        <span>Use GPS Geolocation</span>
+                    </button>
+                </div>
+
+                <div class="bg-slate-950/60 rounded-lg p-2.5 border border-slate-800/60 text-xs space-y-1 text-slate-400">
+                    <div class="flex justify-between">
+                        <span>Selected City:</span>
+                        <span id="current-location-name" class="font-semibold text-slate-200">Bareilly, India</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Coordinates:</span>
+                        <span id="current-coords" class="font-mono text-slate-300">28.3670° N, 79.4304° E</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Scenario Simulator Trigger Card -->
+            <div class="bg-gradient-to-br from-red-950/40 via-slate-900 to-slate-900 border border-red-900/30 rounded-xl p-4 shadow-lg space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-red-400 flex items-center gap-2">
+                        <i class="fa-solid fa-vials"></i>
+                        Test Scenarios
+                    </h3>
+                    <span class="text-[10px] bg-red-500/20 text-red-300 px-2 py-0.5 rounded">Demo Mode</span>
+                </div>
+                <p class="text-xs text-slate-400">Test the early warning engine with simulated extreme weather conditions.</p>
+                <div class="grid grid-cols-3 gap-2 pt-1">
+                    <button onclick="loadScenario('flood')" class="bg-slate-800 hover:bg-red-950/60 border border-slate-700 hover:border-red-600/50 p-2 rounded-lg text-center transition group">
+                        <i class="fa-solid fa-water text-blue-400 group-hover:scale-110 transition-transform mb-1 block"></i>
+                        <span class="text-[10px] font-medium text-slate-300">Flood</span>
+                    </button>
+                    <button onclick="loadScenario('cyclone')" class="bg-slate-800 hover:bg-red-950/60 border border-slate-700 hover:border-red-600/50 p-2 rounded-lg text-center transition group">
+                        <i class="fa-solid fa-hurricane text-amber-400 group-hover:scale-110 transition-transform mb-1 block"></i>
+                        <span class="text-[10px] font-medium text-slate-300">Cyclone</span>
+                    </button>
+                    <button onclick="loadScenario('heatwave')" class="bg-slate-800 hover:bg-red-950/60 border border-slate-700 hover:border-red-600/50 p-2 rounded-lg text-center transition group">
+                        <i class="fa-solid fa-temperature-arrow-up text-red-400 group-hover:scale-110 transition-transform mb-1 block"></i>
+                        <span class="text-[10px] font-medium text-slate-300">Heatwave</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="lg:col-span-9 space-y-6">
+
+            <!-- TAB 1: DASHBOARD -->
+            <div id="tab-dashboard" class="space-y-6 tab-content">
+                
+                <!-- Active Warning Alert Banner (Dynamic) -->
+                <div id="active-alert-banner" class="bg-red-950/60 border border-red-600/60 rounded-xl p-4 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div class="flex items-start gap-3">
+                        <div class="bg-red-600 text-white p-3 rounded-xl shadow-lg shadow-red-600/30">
+                            <i id="banner-alert-icon" class="fa-solid fa-triangle-exclamation text-xl animate-bounce"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span id="banner-severity-badge" class="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wider">CRITICAL RISK</span>
+                                <span id="banner-disaster-type" class="text-xs font-medium text-red-300">Severe Flood Warning</span>
+                            </div>
+                            <h2 id="banner-title" class="text-base font-bold text-white mt-1">Heavy rainfall & rising precipitation expected in target sector.</h2>
+                            <p id="banner-action" class="text-xs text-red-200 mt-0.5">Recommended: Move away from low-lying drainage zones and follow local emergency authority bulletins.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+                        <button onclick="switchTab('alerts')" class="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow transition whitespace-nowrap">
+                            View All Warnings
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Metrics Grid 1: Current Weather -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-cloud-sun text-red-500"></i>
+                            <h2 class="font-bold text-base text-slate-100">Observed Weather Data</h2>
+                        </div>
+                        <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-md border border-slate-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-satellite-dish text-emerald-400"></i>
+                            <span>Open-Meteo API (Live)</span>
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <!-- Temp -->
+                        <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
+                            <div class="flex items-center justify-between text-slate-400 text-xs">
+                                <span>Temperature</span>
+                                <i class="fa-solid fa-temperature-half text-amber-400"></i>
+                            </div>
+                            <div class="mt-3">
+                                <div id="weather-temp" class="text-2xl font-bold text-white">--°C</div>
+                                <div id="weather-condition-text" class="text-xs text-slate-400 mt-0.5">Fetching live data...</div>
+                            </div>
+                        </div>
+
+                        <!-- Rainfall -->
+                        <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
+                            <div class="flex items-center justify-between text-slate-400 text-xs">
+                                <span>Precipitation / Rain</span>
+                                <i class="fa-solid fa-cloud-rain text-blue-400"></i>
+                            </div>
+                            <div class="mt-3">
+                                <div id="weather-rain" class="text-2xl font-bold text-white">-- mm</div>
+                                <div class="text-xs text-blue-400 mt-0.5">Last 24h accumulation</div>
+                            </div>
+                        </div>
+
+                        <!-- Wind Speed -->
+                        <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
+                            <div class="flex items-center justify-between text-slate-400 text-xs">
+                                <span>Wind Speed</span>
+                                <i class="fa-solid fa-wind text-cyan-400"></i>
+                            </div>
+                            <div class="mt-3">
+                                <div id="weather-wind" class="text-2xl font-bold text-white">-- km/h</div>
+                                <div id="weather-gusts" class="text-xs text-slate-400 mt-0.5">Gusts: -- km/h</div>
+                            </div>
+                        </div>
+
+                        <!-- Humidity -->
+                        <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
+                            <div class="flex items-center justify-between text-slate-400 text-xs">
+                                <span>Humidity & Pressure</span>
+                                <i class="fa-solid fa-droplet text-indigo-400"></i>
+                            </div>
+                            <div class="mt-3">
+                                <div id="weather-humidity" class="text-2xl font-bold text-white">--%</div>
+                                <div id="weather-pressure" class="text-xs text-slate-400 mt-0.5">Pressure: -- hPa</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grid 2: AI Risk Analysis & Status Overview -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- AI Risk Scoring Engine (Rule-based Baseline) -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-brain text-red-500"></i>
+                                    <h2 class="font-bold text-base text-slate-100">AI Risk Analysis Engine</h2>
+                                </div>
+                                <span class="text-[10px] bg-red-500/20 text-red-300 px-2 py-0.5 rounded font-mono">Baseline v1.0</span>
+                            </div>
+
+                            <p class="text-xs text-slate-400 mt-3">Transparent rule-based risk evaluation trained on meteorological indicators. Ready for ML model integration.</p>
+
+                            <!-- Risk Bars List -->
+                            <div class="space-y-3.5 mt-4">
+                                <!-- Flood Risk -->
+                                <div>
+                                    <div class="flex justify-between text-xs font-medium mb-1">
+                                        <span class="text-slate-300 flex items-center gap-1.5"><i class="fa-solid fa-water text-blue-400"></i> Flood Risk</span>
+                                        <span id="risk-val-flood" class="font-bold text-slate-200">78%</span>
+                                    </div>
+                                    <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                                        <div id="risk-bar-flood" class="bg-gradient-to-r from-amber-500 to-red-600 h-2.5 rounded-full transition-all duration-500" style="width: 78%"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Storm / Cyclone Risk -->
+                                <div>
+                                    <div class="flex justify-between text-xs font-medium mb-1">
+                                        <span class="text-slate-300 flex items-center gap-1.5"><i class="fa-solid fa-hurricane text-amber-400"></i> Cyclone / Storm Risk</span>
+                                        <span id="risk-val-storm" class="font-bold text-slate-200">42%</span>
+                                    </div>
+                                    <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                                        <div id="risk-bar-storm" class="bg-gradient-to-r from-emerald-500 to-amber-500 h-2.5 rounded-full transition-all duration-500" style="width: 42%"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Heatwave Risk -->
+                                <div>
+                                    <div class="flex justify-between text-xs font-medium mb-1">
+                                        <span class="text-slate-300 flex items-center gap-1.5"><i class="fa-solid fa-temperature-arrow-up text-red-400"></i> Heatwave Risk</span>
+                                        <span id="risk-val-heat" class="font-bold text-slate-200">18%</span>
+                                    </div>
+                                    <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                                        <div id="risk-bar-heat" class="bg-emerald-500 h-2.5 rounded-full transition-all duration-500" style="width: 18%"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Landslide Risk -->
+                                <div>
+                                    <div class="flex justify-between text-xs font-medium mb-1">
+                                        <span class="text-slate-300 flex items-center gap-1.5"><i class="fa-solid fa-mountain text-amber-500"></i> Landslide Risk</span>
+                                        <span id="risk-val-landslide" class="font-bold text-slate-200">35%</span>
+                                    </div>
+                                    <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                                        <div id="risk-bar-landslide" class="bg-amber-500 h-2.5 rounded-full transition-all duration-500" style="width: 35%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 mt-4 border-t border-slate-800 flex items-center justify-between text-xs">
+                            <span class="text-slate-400">Confidence Score: <strong id="risk-confidence" class="text-slate-200">84%</strong></span>
+                            <span class="text-slate-400">Status: <span id="overall-risk-status" class="text-red-400 font-bold uppercase">High Risk</span></span>
+                        </div>
+                    </div>
+
+                    <!-- System Status & Data Availability -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-database text-cyan-400"></i>
+                                    <h2 class="font-bold text-base text-slate-100">Dataset & Monitoring Status</h2>
+                                </div>
+                                <span class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-medium">Active</span>
+                            </div>
+
+                            <div class="space-y-3 mt-4 text-xs">
+                                <div class="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-lg border border-slate-800">
+                                    <span class="text-slate-300 flex items-center gap-2"><i class="fa-solid fa-cloud text-blue-400"></i> Open-Meteo Weather API</span>
+                                    <span class="text-emerald-400 font-medium flex items-center gap-1"><i class="fa-solid fa-circle text-[8px]"></i> Connected</span>
+                                </div>
+
+                                <div class="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-lg border border-slate-800">
+                                    <span class="text-slate-300 flex items-center gap-2"><i class="fa-solid fa-water text-blue-500"></i> River Water Level Data</span>
+                                    <span class="text-amber-400 font-medium bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">River data unavailable</span>
+                                </div>
+
+                                <div class="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-lg border border-slate-800">
+                                    <span class="text-slate-300 flex items-center gap-2"><i class="fa-solid fa-map text-emerald-400"></i> Leaflet & OpenStreetMap</span>
+                                    <span class="text-emerald-400 font-medium flex items-center gap-1"><i class="fa-solid fa-circle text-[8px]"></i> Active Rendering</span>
+                                </div>
+
+                                <div class="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-lg border border-slate-800">
+                                    <span class="text-slate-300 flex items-center gap-2"><i class="fa-solid fa-server text-indigo-400"></i> FastAPI Backend / SQLite</span>
+                                    <span class="text-indigo-400 font-medium">Ready (Dockerized)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+                            <span>Last Synchronization:</span>
+                            <span id="footer-sync-time" class="font-mono text-slate-300">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7-Day Weather Forecast Section -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-calendar-days text-red-500"></i>
+                            <h2 class="font-bold text-base text-slate-100">7-Day Meteorological Forecast</h2>
+                        </div>
+                        <span class="text-xs text-slate-400">Parsed from Open-Meteo daily endpoint</span>
+                    </div>
+
+                    <div id="forecast-container" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                        <!-- Populated via JavaScript -->
+                        <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 text-center space-y-2 animate-pulse">
+                            <div class="text-xs text-slate-400">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- TAB 2: ALERTS PAGE -->
+            <div id="tab-alerts" class="space-y-6 tab-content hidden">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
+                            <h2 class="font-bold text-base text-slate-100">Active Disaster Warnings & Advisories</h2>
+                        </div>
+                        <button onclick="fetchAllAlerts()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition">
+                            <i class="fa-solid fa-rotate-right mr-1"></i> Refresh Alerts
+                        </button>
+                    </div>
+
+                    <p class="text-xs text-slate-400">Real-time alerts triggered when meteorological metrics cross configurable severity thresholds.</p>
+
+                    <div id="alerts-list-container" class="space-y-3 mt-4">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: RISK MAP -->
+            <div id="tab-map" class="space-y-6 tab-content hidden">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-map-location-dot text-emerald-400"></i>
+                            <h2 class="font-bold text-base text-slate-100">Interactive Spatial Risk Map</h2>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-slate-400">
+                            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> Critical</span>
+                            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> High</span>
+                            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Low</span>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-slate-400">Displays current selected location, regional warning zones, and demo hazard epicenters rendered via Leaflet & OpenStreetMap.</p>
+
+                    <div id="leaflet-map" class="w-full h-[500px] rounded-xl border border-slate-800 z-10"></div>
+                </div>
+            </div>
+
+            <!-- TAB 4: EMERGENCY RESPONSE -->
+            <div id="tab-response" class="space-y-6 tab-content hidden">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-shield-halved text-cyan-400"></i>
+                            <h2 class="font-bold text-base text-slate-100">Emergency Incident Command Center</h2>
+                        </div>
+                        <button onclick="openNewIncidentModal()" class="bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-plus"></i> Log New Incident
+                        </button>
+                    </div>
+
+                    <p class="text-xs text-slate-400">Manage active rescue operations, assign emergency response teams, and update incident tracking statuses.</p>
+
+                    <div class="overflow-x-auto mt-4">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-950 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                                <tr>
+                                    <th class="p-3">Disaster Type</th>
+                                    <th class="p-3">Location</th>
+                                    <th class="p-3">Severity</th>
+                                    <th class="p-3">Assigned Team</th>
+                                    <th class="p-3">Status</th>
+                                    <th class="p-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="incidents-table-body" class="divide-y divide-slate-800/80">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 5: EMERGENCY CONTACTS -->
+            <div id="tab-contacts" class="space-y-6 tab-content hidden">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-phone-volume text-purple-400"></i>
+                            <h2 class="font-bold text-base text-slate-100">Verified Emergency Services & Hotlines</h2>
+                        </div>
+                        <span class="text-xs bg-purple-500/20 text-purple-300 px-2.5 py-1 rounded">India & Regional</span>
+                    </div>
+
+                    <p class="text-xs text-slate-400">Official verified disaster helpline numbers for immediate response and dispatch.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <!-- Card 1 -->
+                        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+                            <div class="space-y-1">
+                                <span class="text-[10px] bg-red-500/20 text-red-400 font-bold px-2 py-0.5 rounded">National Helpline</span>
+                                <h3 class="font-bold text-slate-200 text-sm">Emergency Response Support System</h3>
+                                <p class="text-xs text-slate-400">Unified pan-India emergency number for Police, Fire, and Health.</p>
+                            </div>
+                            <a href="tel:112" class="bg-red-600 hover:bg-red-700 text-white font-mono font-bold px-4 py-2.5 rounded-lg text-sm shadow transition flex items-center gap-2">
+                                <i class="fa-solid fa-phone"></i> 112
+                            </a>
+                        </div>
+
+                        <!-- Card 2 -->
+                        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+                            <div class="space-y-1">
+                                <span class="text-[10px] bg-amber-500/20 text-amber-400 font-bold px-2 py-0.5 rounded">Disaster Authority</span>
+                                <h3 class="font-bold text-slate-200 text-sm">National Disaster Management (NDMA)</h3>
+                                <p class="text-xs text-slate-400">Control room hotline for natural hazard reporting and relief.</p>
+                            </div>
+                            <a href="tel:1078" class="bg-amber-600 hover:bg-amber-700 text-white font-mono font-bold px-4 py-2.5 rounded-lg text-sm shadow transition flex items-center gap-2">
+                                <i class="fa-solid fa-phone"></i> 1078
+                            </a>
+                        </div>
+
+                        <!-- Card 3 -->
+                        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+                            <div class="space-y-1">
+                                <span class="text-[10px] bg-blue-500/20 text-blue-400 font-bold px-2 py-0.5 rounded">Fire & Rescue</span>
+                                <h3 class="font-bold text-slate-200 text-sm">Fire Emergency Services</h3>
+                                <p class="text-xs text-slate-400">Fire brigade, entrapment, and flood rescue support.</p>
+                            </div>
+                            <a href="tel:101" class="bg-blue-600 hover:bg-blue-700 text-white font-mono font-bold px-4 py-2.5 rounded-lg text-sm shadow transition flex items-center gap-2">
+                                <i class="fa-solid fa-phone"></i> 101
+                            </a>
+                        </div>
+
+                        <!-- Card 4 -->
+                        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+                            <div class="space-y-1">
+                                <span class="text-[10px] bg-emerald-500/20 text-emerald-400 font-bold px-2 py-0.5 rounded">Medical Aid</span>
+                                <h3 class="font-bold text-slate-200 text-sm">Ambulance Emergency</h3>
+                                <p class="text-xs text-slate-400">Urgent medical evacuation and trauma care dispatch.</p>
+                            </div>
+                            <a href="tel:102" class="bg-emerald-600 hover:bg-emerald-700 text-white font-mono font-bold px-4 py-2.5 rounded-lg text-sm shadow transition flex items-center gap-2">
+                                <i class="fa-solid fa-phone"></i> 102
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 6: BACKEND ARCHITECTURE & CODE -->
+            <div id="tab-backend" class="space-y-6 tab-content hidden">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-server text-indigo-400"></i>
+                            <h2 class="font-bold text-base text-slate-100">FastAPI Backend & ML Architecture Viewer</h2>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="switchCodeTab('main')" id="btn-code-main" class="px-3 py-1 bg-indigo-600 text-white rounded text-xs font-medium transition">main.py</button>
+                            <button onclick="switchCodeTab('risk')" id="btn-code-risk" class="px-3 py-1 bg-slate-800 text-slate-300 rounded text-xs font-medium transition">risk_engine.py</button>
+                            <button onclick="switchCodeTab('db')" id="btn-code-db" class="px-3 py-1 bg-slate-800 text-slate-300 rounded text-xs font-medium transition">database.py</button>
+                            <button onclick="switchCodeTab('docker')" id="btn-code-docker" class="px-3 py-1 bg-slate-800 text-slate-300 rounded text-xs font-medium transition">docker-compose.yml</button>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-slate-400">Complete Python source files for deploying AlertBridge on FastAPI, SQLite/PostgreSQL, and Docker containers.</p>
+
+                    <div class="relative bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-x-auto">
+                        <button onclick="copyCode()" class="absolute top-3 right-3 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded text-xs font-mono flex items-center gap-1.5 transition">
+                            <i class="fa-regular fa-copy"></i> Copy
+                        </button>
+                        <pre id="code-viewer-content" class="text-xs font-mono text-cyan-300 leading-relaxed">
+# Loading backend source...
+                        </pre>
+                    </div>
+
+                    <!-- Setup Instructions -->
+                    <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                            <i class="fa-solid fa-terminal text-emerald-400"></i>
+                            Local Execution & Setup Commands
+                        </h3>
+                        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 font-mono text-xs text-slate-300 space-y-1.5">
+                            <p class="text-slate-500"># 1. Clone repository & install dependencies</p>
+                            <p>pip install -r requirements.txt</p>
+                            <p class="text-slate-500 pt-1"># 2. Configure environment variables</p>
+                            <p>cp .env.example .env</p>
+                            <p class="text-slate-500 pt-1"># 3. Run FastAPI development server</p>
+                            <p>uvicorn backend.main:app --reload --port 8000</p>
+                            <p class="text-slate-500 pt-1"># 4. Or launch with Docker Compose</p>
+                            <p>docker-compose up --build</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Footer Disclaimer -->
+    <footer class="bg-slate-900 border-t border-slate-800 py-4 mt-auto text-center text-xs text-slate-400 px-4">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+            <p><strong>AlertBridge</strong> — AI-Powered Disaster Early Warning & Response Prototype. Created for student research & evaluation.</p>
+            <p class="text-slate-500">Not a substitute for official meteorological departments or disaster response agencies.</p>
+        </div>
+    </footer>
+
+    <!-- Scenario Simulator Modal -->
+    <div id="scenario-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-base text-white flex items-center gap-2">
+                    <i class="fa-solid fa-vials text-red-500"></i> Disaster Scenario Simulator
+                </h3>
+                <button onclick="toggleDemoModeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <p class="text-xs text-slate-400">Select a simulated scenario to override live API data for testing early warning alerts, risk scoring, and emergency response workflows:</p>
+
+            <div class="space-y-3">
+                <button onclick="loadScenario('flood'); toggleDemoModeModal();" class="w-full bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-red-500/50 p-3 rounded-xl text-left transition flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-blue-500/20 text-blue-400 p-2.5 rounded-lg"><i class="fa-solid fa-water text-lg"></i></div>
+                        <div>
+                            <div class="font-bold text-slate-200 text-sm">Critical Flood Scenario</div>
+                            <div class="text-xs text-slate-400">Rainfall: 150 mm | Risk: Critical (92%)</div>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-xs text-slate-600 group-hover:text-white transition"></i>
+                </button>
+
+                <button onclick="loadScenario('cyclone'); toggleDemoModeModal();" class="w-full bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/50 p-3 rounded-xl text-left transition flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-amber-500/20 text-amber-400 p-2.5 rounded-lg"><i class="fa-solid fa-hurricane text-lg"></i></div>
+                        <div>
+                            <div class="font-bold text-slate-200 text-sm">Severe Cyclone Storm</div>
+                            <div class="text-xs text-slate-400">Wind: 115 km/h | Pressure: 978 hPa</div>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-xs text-slate-600 group-hover:text-white transition"></i>
+                </button>
+
+                <button onclick="loadScenario('heatwave'); toggleDemoModeModal();" class="w-full bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-red-500/50 p-3 rounded-xl text-left transition flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-red-500/20 text-red-400 p-2.5 rounded-lg"><i class="fa-solid fa-temperature-arrow-up text-lg"></i></div>
+                        <div>
+                            <div class="font-bold text-slate-200 text-sm">Extreme Heatwave</div>
+                            <div class="text-xs text-slate-400">Temperature: 46°C | Humidity: 22%</div>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-xs text-slate-600 group-hover:text-white transition"></i>
+                </button>
+            </div>
+
+            <button onclick="resetToLiveWeather(); toggleDemoModeModal();" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs font-semibold transition">
+                Reset to Live Open-Meteo API Data
+            </button>
+        </div>
+    </div>
+
+    <!-- New Incident Modal -->
+    <div id="incident-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-base text-white flex items-center gap-2">
+                    <i class="fa-solid fa-shield-halved text-cyan-400"></i> Log Emergency Incident
+                </h3>
+                <button onclick="openNewIncidentModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <form onsubmit="handleNewIncidentSubmit(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-slate-400 mb-1 font-medium">Disaster Type</label>
+                    <select id="inc-type" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500">
+                        <option value="Flood">Flood</option>
+                        <option value="Cyclone / Storm">Cyclone / Storm</option>
+                        <option value="Heatwave">Heatwave</option>
+                        <option value="Landslide">Landslide</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-slate-400 mb-1 font-medium">Location Name</label>
+                    <input type="text" id="inc-location" required placeholder="e.g. Bareilly Sector 4" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500">
+                </div>
+
+                <div>
+                    <label class="block text-slate-400 mb-1 font-medium">Severity Level</label>
+                    <select id="inc-severity" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500">
+                        <option value="CRITICAL">CRITICAL</option>
+                        <option value="HIGH" selected>HIGH</option>
+                        <option value="MODERATE">MODERATE</option>
+                        <option value="LOW">LOW</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-slate-400 mb-1 font-medium">Assigned Rescue Team</label>
+                    <input type="text" id="inc-team" placeholder="e.g. NDRF Alpha Team" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500">
+                </div>
+
+                <div class="pt-3 flex gap-2">
+                    <button type="submit" class="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-2.5 rounded-lg transition">Create Incident</button>
+                    <button type="button" onclick="openNewIncidentModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-lg transition">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Application JavaScript -->
+    <script src="js/app.js"></script>
+</body>
+</html>
