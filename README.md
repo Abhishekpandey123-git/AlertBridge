@@ -32,6 +32,6 @@ AlertBridge is a professional emergency management platform that monitors real-t
 
 4. **Launch Frontend:**
    Open `frontend/index.html` in any modern web browser or serve with Nginx / Live Server.
-
+   python run.py
 ---
 *Note: This is a student project prototype and not a substitute for official meteorological authorities.*
