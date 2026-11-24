@@ -14,7 +14,7 @@ AlertBridge is a professional emergency management platform that monitors real-t
 - **FastAPI Python Backend**: Complete backend architecture, SQLAlchemy models, and Docker configuration.
 
 ## 🛠️ Local Setup & Installation
-
+Expand-Archive -Path .\AlertBridge.zip -DestinationPath . -Force
 1. **Install Python Dependencies:**
    ```bash
    pip install -r requirements.txt
